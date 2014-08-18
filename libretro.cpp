@@ -71,8 +71,8 @@ void retro_set_environment(retro_environment_t cb)
          "Doom Hack; disabled|enabled",
       },
       {
-         "virtualjaguar_pal (Restart)",
-         "Pal; disabled|enabled",
+         "virtualjaguar_pal",
+         "Pal (Restart); disabled|enabled",
       },
       {
          "virtualjaguar_bios",

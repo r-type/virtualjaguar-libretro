@@ -418,6 +418,7 @@ void retro_run(void)
 	static int lastw=STARTWIDTH;
 
 	if(lastw!=TOMGetVideoModeWidth()){
+		retro_get_system_av_info(&g_av_info);
 
 		printf("width change:%d-" ,lastw);
 		lastw=TOMGetVideoModeWidth();

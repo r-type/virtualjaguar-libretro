@@ -98,7 +98,7 @@ uint32_t JaguarLoadROM(uint8_t * &rom, char * path)
 		fseek(fp, 0, SEEK_SET);
 		fread(rom, 1, romSize, fp);
 		fclose(fp);
-	//}
+	}
 
 	WriteLog("OK (%i bytes)\n", romSize);
 

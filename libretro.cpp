@@ -55,7 +55,7 @@ void retro_set_environment(retro_environment_t cb)
    struct retro_variable variables[] = {
       {
          "virtualjaguar_usefastblitter",
-         "Fast Blitter; disabled|enabled",
+         "Fast Blitter; enabled|disabled",
       },
       {
          "virtualjaguar_doom_res_hack",
@@ -105,7 +105,7 @@ static void check_variables(void)
          vjs.useFastBlitter=0;
    }
    else
-      vjs.useFastBlitter=0;
+      vjs.useFastBlitter=1;
 
    var.key = "virtualjaguar_doom_res_hack";
    var.value = NULL;

@@ -154,7 +154,16 @@ else
 FLAGS += -O3 -ffast-math -fomit-frame-pointer -DNDEBUG
 endif
 
-LDFLAGS += $(fpic) -lz $(SHARED)
+# Set vars for libcdio
+ifneq "$(shell pkg-config --silence-errors --libs libcdio)" ""
+HAVECDIO := -DHAVE_LIB_CDIO
+CDIOLIB := -lcdio
+else
+HAVECDIO :=
+CDIOLIB :=
+endif
+
+LDFLAGS += $(fpic) -lz $(SHARED)  $(CDIOLIB)
 FLAGS += $(fpic) 
 FLAGS += -I. -Isrc -Isrc/m68000
 
@@ -177,8 +186,8 @@ endif
 
 FLAGS += -D__LIBRETRO__ $(WARNINGS)
 
-CXXFLAGS += $(FLAGS) -D__GCCUNIX__
-CFLAGS += $(FLAGS)
+CXXFLAGS += $(FLAGS) -D__GCCUNIX__ $(HAVECDIO)
+CFLAGS += $(FLAGS) $(HAVECDIO)
 
 $(TARGET): $(OBJECTS)
 ifeq ($(STATIC_LINKING), 1)

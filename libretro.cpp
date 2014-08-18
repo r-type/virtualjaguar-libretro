@@ -5,6 +5,8 @@
 #include "file.h"
 #include "jagbios.h"
 #include "jagbios2.h"
+#include "jagcdbios.h"
+#include "jagstub2bios.h"
 #include "jaguar.h"
 #include "dac.h"
 #include "dsp.h"
@@ -24,6 +26,13 @@
 #define BUFPAL  (SAMPLERATE/FPAL*2)
 #define BUFNTSC (SAMPLERATE/FNTSC*2)
 #define BUFMAX 2048
+
+// From jaguar.cpp
+extern bool startM68KTracing;
+// From joystick.cpp
+extern int blit_start_log;
+// From blitter.cpp
+extern bool startConciseBlitLogging;
 
 static bool failed_init;
 int videoWidth, videoHeight;
@@ -84,6 +93,18 @@ void retro_set_environment(retro_environment_t cb)
       {
          "virtualjaguar_log",
          "Log; disabled|enabled",
+      },
+      {
+         "virtualjaguar_blit_start_log",
+         "blit_start_Log; stop|start",
+      },
+      {
+         "virtualjaguar_startConciseBlitLogging",
+         "startConciseBlit_Log; stop|start",
+      },
+      {
+         "virtualjaguar_startM68KTracing",
+         "startM68KTracing; stop|start",
       },
       { NULL, NULL },
    };
@@ -197,6 +218,46 @@ static void check_variables(void)
    }
    else
       log_enabled = 0;
+
+   var.key = "virtualjaguar_blit_start_log";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (strcmp(var.value, "start") == 0)
+         blit_start_log = true;
+      if (strcmp(var.value, "stop") == 0)
+         blit_start_log = false;
+   }
+   else
+      blit_start_log = false;
+
+   var.key = "virtualjaguar_startConciseBlitLogging";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (strcmp(var.value, "start") == 0)
+         startConciseBlitLogging = true;
+      if (strcmp(var.value, "stop") == 0)
+         startConciseBlitLogging = false;
+   }
+   else
+      startConciseBlitLogging = false;
+
+   var.key = "virtualjaguar_startM68KTracing";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (strcmp(var.value, "start") == 0)
+         startM68KTracing = true;
+      if (strcmp(var.value, "stop") == 0)
+         startM68KTracing = false;
+   }
+   else
+      startM68KTracing = false;
+
 } 
   
 static void update_input(void)
@@ -216,15 +277,15 @@ static void update_input(void)
    input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START) ? joypad0Buttons[BUTTON_PAUSE] = 0xff : joypad0Buttons[BUTTON_PAUSE] = 0x00;
    input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT) ? joypad0Buttons[BUTTON_OPTION] = 0xff : joypad0Buttons[BUTTON_OPTION] = 0x00;
 
-// others   
+// others pound/hash/0-9  
  input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X) ? joypad0Buttons[BUTTON_0] = 0xff : joypad0Buttons[BUTTON_0] = 0x00;
  input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R) ? joypad0Buttons[BUTTON_d] = 0xff : joypad0Buttons[BUTTON_d] = 0x00;
  input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L) ? joypad0Buttons[BUTTON_s] = 0xff : joypad0Buttons[BUTTON_s] = 0x00;
  input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2) ? joypad0Buttons[BUTTON_1] = 0xff : joypad0Buttons[BUTTON_1] = 0x00;
  input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2) ? joypad0Buttons[BUTTON_2] = 0xff : joypad0Buttons[BUTTON_2] = 0x00;
  input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R3) ? joypad0Buttons[BUTTON_3] = 0xff : joypad0Buttons[BUTTON_3] = 0x00;
- input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3) ? joypad0Buttons[BUTTON_3] = 0xff : joypad0Buttons[BUTTON_3] = 0x00;
-
+ input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3) ? joypad0Buttons[BUTTON_4] = 0xff : joypad0Buttons[BUTTON_4] = 0x00;
+ //only for P1 for now
  input_state_cb(0, RETRO_DEVICE_KEYBOARD, 0,RETROK_KP0) ? joypad0Buttons[BUTTON_0] = 0xff : joypad0Buttons[BUTTON_0] = 0x00;
  input_state_cb(0, RETRO_DEVICE_KEYBOARD, 0,RETROK_KP1) ? joypad0Buttons[BUTTON_1] = 0xff : joypad0Buttons[BUTTON_1] = 0x00;
  input_state_cb(0, RETRO_DEVICE_KEYBOARD, 0,RETROK_KP2) ? joypad0Buttons[BUTTON_2] = 0xff : joypad0Buttons[BUTTON_2] = 0x00;
@@ -236,6 +297,26 @@ static void update_input(void)
  input_state_cb(0, RETRO_DEVICE_KEYBOARD, 0,RETROK_KP8) ? joypad0Buttons[BUTTON_8] = 0xff : joypad0Buttons[BUTTON_8] = 0x00;
  input_state_cb(0, RETRO_DEVICE_KEYBOARD, 0,RETROK_KP9) ? joypad0Buttons[BUTTON_9] = 0xff : joypad0Buttons[BUTTON_9] = 0x00;
 
+//JOY2
+
+   input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP) ? joypad1Buttons[BUTTON_U] = 0xff : joypad1Buttons[BUTTON_U] = 0x00;
+   input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN) ? joypad1Buttons[BUTTON_D] = 0xff : joypad1Buttons[BUTTON_D] = 0x00;
+   input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT) ? joypad1Buttons[BUTTON_L] = 0xff : joypad1Buttons[BUTTON_L] = 0x00;
+   input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT) ? joypad1Buttons[BUTTON_R] = 0xff : joypad1Buttons[BUTTON_R] = 0x00;
+   input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A) ? joypad1Buttons[BUTTON_A] = 0xff : joypad1Buttons[BUTTON_A] = 0x00;
+   input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B) ? joypad1Buttons[BUTTON_B] = 0xff : joypad1Buttons[BUTTON_B] = 0x00;
+   input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y) ? joypad1Buttons[BUTTON_C] = 0xff : joypad1Buttons[BUTTON_C] = 0x00;
+   input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START) ? joypad1Buttons[BUTTON_PAUSE] = 0xff : joypad1Buttons[BUTTON_PAUSE] = 0x00;
+   input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT) ? joypad1Buttons[BUTTON_OPTION] = 0xff : joypad1Buttons[BUTTON_OPTION] = 0x00;
+
+// others pound/hash/0-9  
+ input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X) ? joypad1Buttons[BUTTON_0] = 0xff : joypad1Buttons[BUTTON_0] = 0x00;
+ input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R) ? joypad1Buttons[BUTTON_d] = 0xff : joypad1Buttons[BUTTON_d] = 0x00;
+ input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L) ? joypad1Buttons[BUTTON_s] = 0xff : joypad1Buttons[BUTTON_s] = 0x00;
+ input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2) ? joypad1Buttons[BUTTON_1] = 0xff : joypad1Buttons[BUTTON_1] = 0x00;
+ input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2) ? joypad1Buttons[BUTTON_2] = 0xff : joypad1Buttons[BUTTON_2] = 0x00;
+ input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R3) ? joypad1Buttons[BUTTON_3] = 0xff : joypad1Buttons[BUTTON_3] = 0x00;
+ input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3) ? joypad1Buttons[BUTTON_3] = 0xff : joypad1Buttons[BUTTON_3] = 0x00;
 
 }
 
@@ -250,7 +331,7 @@ void retro_get_system_info(struct retro_system_info *info)
    info->library_name = "Virtual Jaguar";
    info->library_version = "v2.1.0+";
    info->need_fullpath = false;
-   info->valid_extensions = "j64|jag|bin|rom";
+   info->valid_extensions = "j64|jag|bin|rom|zip";
 }
 
 void retro_get_system_av_info(struct retro_system_av_info *info)
@@ -318,6 +399,8 @@ bool retro_load_game(const struct retro_game_info *info)
    vjs.renderType = 0;
    check_variables();
 
+	jaguarCartInserted = true;
+
 	if (log_enabled)
 	{
 		bool success = (bool)LogInit("./virtualjaguar.log");	// Init logfile
@@ -329,6 +412,7 @@ bool retro_load_game(const struct retro_game_info *info)
    //strcpy(vjs.EEPROMPath, "/path/to/eeproms/");   // battery saves
    JaguarInit();                                             // set up hardware
    memcpy(jagMemSpace + 0xE00000, (vjs.biosType == BT_K_SERIES ? jaguarBootROM : jaguarBootROM2), 0x20000); // Use the stock BIOS
+//memcpy(jagMemSpace + 0x800000, jaguarCDBootROM, 0x40000);
 
    JaguarSetScreenPitch(videoWidth);
    JaguarSetScreenBuffer(videoBuffer);

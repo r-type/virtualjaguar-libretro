@@ -61,7 +61,7 @@ uint32_t JaguarLoadROM(uint8_t * &rom, char * path)
 
 	WriteLog("Succeeded in finding extension (%s)!\n", ext);
 	WriteLog("VJ: Loading \"%s\"...", path);
-#if 0
+#if 1
 	if (strcasecmp(ext, ".zip") == 0)
 	{
 		// Handle ZIP file loading here...
@@ -348,7 +348,7 @@ static bool CheckExtension(const uint8_t * filename, const char * ext)
 // NOTE: If the thing we're looking for is found, it allocates it in the passed in buffer.
 //       Which means we have to deallocate it later.
 //
-/*uint32_t GetFileFromZIP(const char * zipFile, FileType type, uint8_t * &buffer)
+uint32_t GetFileFromZIP(const char * zipFile, FileType type, uint8_t * &buffer)
 {
 // NOTE: We could easily check for this by discarding anything that's larger than the RAM/ROM
 //       size of the Jaguar console.
@@ -499,7 +499,7 @@ bool FindFileInZIPWithCRC32(const char * zipFile, uint32_t crc)
 
 	fclose(zip);
 	return false;
-}*/
+}
 
 
 //

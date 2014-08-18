@@ -129,7 +129,8 @@ VIRTUALJAGUAR_SOURCES := $(VIRTUALJAGUAR_DIR)/blitter.cpp \
 	$(VIRTUALJAGUAR_DIR)/state.cpp \
 	$(VIRTUALJAGUAR_DIR)/tom.cpp \
 	$(VIRTUALJAGUAR_DIR)/universalhdr.cpp \
-	$(VIRTUALJAGUAR_DIR)/wavetable.cpp
+	$(VIRTUALJAGUAR_DIR)/wavetable.cpp\
+	$(VIRTUALJAGUAR_DIR)/unzip.cpp 
 
 LIBRETRO_SOURCES := libretro.cpp
 

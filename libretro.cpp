@@ -14,6 +14,17 @@
 #include "settings.h"
 #include "tom.h"
 
+#define STARTWIDTH 320
+#define STARTHEIGHT 240
+#define MAXWIDTH 1400
+#define MAXHEIGHT 576
+#define FNTSC 60
+#define FPAL 50
+#define SAMPLERATE 48000
+#define BUFPAL  (SAMPLERATE/FPAL*2)
+#define BUFNTSC (SAMPLERATE/FNTSC*2)
+#define BUFMAX 2048
+
 static bool failed_init;
 int videoWidth, videoHeight;
 uint32_t *videoBuffer = NULL;
@@ -32,7 +43,10 @@ void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audio_batch_c
 void retro_set_input_poll(retro_input_poll_t cb) { input_poll_cb = cb; }
 void retro_set_input_state(retro_input_state_t cb) { input_state_cb = cb; }
 
+static struct retro_system_av_info g_av_info;
+
 int doom_res_hack=0; // Doom Hack to double pixel if pwidth==8 (163*2)
+int log_enabled=0;
 
 void retro_set_environment(retro_environment_t cb)
 {
@@ -42,12 +56,34 @@ void retro_set_environment(retro_environment_t cb)
       {
          "virtualjaguar_usefastblitter",
          "Fast Blitter; disabled|enabled",
-
       },
       {
          "virtualjaguar_doom_res_hack",
-         "Doom Res Hack; disabled|enabled",
-
+         "Doom Hack; disabled|enabled",
+      },
+      {
+         "virtualjaguar_pal",
+         "Pal; disabled|enabled",
+      },
+      {
+         "virtualjaguar_bios",
+         "Bios; disabled|enabled",
+      },
+      {
+         "virtualjaguar_audio",
+         "Audio; enabled|disabled",
+      },
+      {
+         "virtualjaguar_gpu",
+         "Gpu; enabled|disabled",
+      },
+      {
+         "virtualjaguar_dsp",
+         "Dsp; enabled|disabled",
+      },
+      {
+         "virtualjaguar_log",
+         "Log; disabled|enabled",
       },
       { NULL, NULL },
    };
@@ -83,8 +119,86 @@ static void check_variables(void)
    }
    else
       doom_res_hack=0;
-} 
 
+   var.key = "virtualjaguar_pal";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (strcmp(var.value, "enabled") == 0)
+         vjs.hardwareTypeNTSC=0;
+      if (strcmp(var.value, "disabled") == 0)
+         vjs.hardwareTypeNTSC=1;
+   }
+   else
+      vjs.hardwareTypeNTSC=1;
+
+   var.key = "virtualjaguar_bios";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (strcmp(var.value, "enabled") == 0)
+         vjs.useJaguarBIOS = true;
+      if (strcmp(var.value, "disabled") == 0)
+         vjs.useJaguarBIOS = false;
+   }
+   else
+      vjs.useJaguarBIOS = false;
+
+   var.key = "virtualjaguar_gpu";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (strcmp(var.value, "enabled") == 0)
+         vjs.GPUEnabled = true;
+      if (strcmp(var.value, "disabled") == 0)
+         vjs.GPUEnabled = false;
+   }
+   else
+      vjs.GPUEnabled = true;
+
+   var.key = "virtualjaguar_audio";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (strcmp(var.value, "enabled") == 0)
+         vjs.audioEnabled = true;
+      if (strcmp(var.value, "disabled") == 0)
+         vjs.audioEnabled = false;
+   }
+   else
+      vjs.audioEnabled = true;
+
+   var.key = "virtualjaguar_dsp";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (strcmp(var.value, "enabled") == 0)
+         vjs.DSPEnabled = true;
+      if (strcmp(var.value, "disabled") == 0)
+         vjs.DSPEnabled = false;
+   }
+   else
+      vjs.DSPEnabled = true;
+
+   var.key = "virtualjaguar_log";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (strcmp(var.value, "enabled") == 0)
+         log_enabled = 1;
+      if (strcmp(var.value, "disabled") == 0)
+         log_enabled = 0;
+   }
+   else
+      log_enabled = 0;
+} 
+  
 static void update_input(void)
 {
    if (!input_poll_cb)
@@ -101,33 +215,57 @@ static void update_input(void)
    input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y) ? joypad0Buttons[BUTTON_C] = 0xff : joypad0Buttons[BUTTON_C] = 0x00;
    input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START) ? joypad0Buttons[BUTTON_PAUSE] = 0xff : joypad0Buttons[BUTTON_PAUSE] = 0x00;
    input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT) ? joypad0Buttons[BUTTON_OPTION] = 0xff : joypad0Buttons[BUTTON_OPTION] = 0x00;
+
+// others   
+ input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X) ? joypad0Buttons[BUTTON_0] = 0xff : joypad0Buttons[BUTTON_0] = 0x00;
+ input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R) ? joypad0Buttons[BUTTON_d] = 0xff : joypad0Buttons[BUTTON_d] = 0x00;
+ input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L) ? joypad0Buttons[BUTTON_s] = 0xff : joypad0Buttons[BUTTON_s] = 0x00;
+ input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2) ? joypad0Buttons[BUTTON_1] = 0xff : joypad0Buttons[BUTTON_1] = 0x00;
+ input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2) ? joypad0Buttons[BUTTON_2] = 0xff : joypad0Buttons[BUTTON_2] = 0x00;
+ input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R3) ? joypad0Buttons[BUTTON_3] = 0xff : joypad0Buttons[BUTTON_3] = 0x00;
+ input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3) ? joypad0Buttons[BUTTON_3] = 0xff : joypad0Buttons[BUTTON_3] = 0x00;
+
+ input_state_cb(0, RETRO_DEVICE_KEYBOARD, 0,RETROK_KP0) ? joypad0Buttons[BUTTON_0] = 0xff : joypad0Buttons[BUTTON_0] = 0x00;
+ input_state_cb(0, RETRO_DEVICE_KEYBOARD, 0,RETROK_KP1) ? joypad0Buttons[BUTTON_1] = 0xff : joypad0Buttons[BUTTON_1] = 0x00;
+ input_state_cb(0, RETRO_DEVICE_KEYBOARD, 0,RETROK_KP2) ? joypad0Buttons[BUTTON_2] = 0xff : joypad0Buttons[BUTTON_2] = 0x00;
+ input_state_cb(0, RETRO_DEVICE_KEYBOARD, 0,RETROK_KP3) ? joypad0Buttons[BUTTON_3] = 0xff : joypad0Buttons[BUTTON_3] = 0x00;
+ input_state_cb(0, RETRO_DEVICE_KEYBOARD, 0,RETROK_KP4) ? joypad0Buttons[BUTTON_4] = 0xff : joypad0Buttons[BUTTON_4] = 0x00;
+ input_state_cb(0, RETRO_DEVICE_KEYBOARD, 0,RETROK_KP5) ? joypad0Buttons[BUTTON_5] = 0xff : joypad0Buttons[BUTTON_5] = 0x00;
+ input_state_cb(0, RETRO_DEVICE_KEYBOARD, 0,RETROK_KP6) ? joypad0Buttons[BUTTON_6] = 0xff : joypad0Buttons[BUTTON_6] = 0x00;
+ input_state_cb(0, RETRO_DEVICE_KEYBOARD, 0,RETROK_KP7) ? joypad0Buttons[BUTTON_7] = 0xff : joypad0Buttons[BUTTON_7] = 0x00;
+ input_state_cb(0, RETRO_DEVICE_KEYBOARD, 0,RETROK_KP8) ? joypad0Buttons[BUTTON_8] = 0xff : joypad0Buttons[BUTTON_8] = 0x00;
+ input_state_cb(0, RETRO_DEVICE_KEYBOARD, 0,RETROK_KP9) ? joypad0Buttons[BUTTON_9] = 0xff : joypad0Buttons[BUTTON_9] = 0x00;
+
+
 }
 
 /************************************
  * libretro implementation
  ************************************/
 
-static struct retro_system_av_info g_av_info;
 
 void retro_get_system_info(struct retro_system_info *info)
 {
    memset(info, 0, sizeof(*info));
    info->library_name = "Virtual Jaguar";
-   info->library_version = "v2.1.0";
+   info->library_version = "v2.1.0+";
    info->need_fullpath = false;
-   info->valid_extensions = "j64|jag";
+   info->valid_extensions = "j64|jag|bin|rom";
 }
 
 void retro_get_system_av_info(struct retro_system_av_info *info)
 {
+   float maspect=(float)game_width/(float)game_height;
+   printf("start res:%dx%d %f\n",game_width,game_height,maspect);
+
    memset(info, 0, sizeof(*info));
-   info->timing.fps            = 60;
-   info->timing.sample_rate    = 48000;
+   info->timing.fps            = FNTSC;
+   info->timing.sample_rate    = SAMPLERATE;
    info->geometry.base_width   = game_width;
    info->geometry.base_height  = game_height;
-   info->geometry.max_width    = 320;
-   info->geometry.max_height   = 240;
-   info->geometry.aspect_ratio = 4.0 / 3.0;
+   info->geometry.max_width    = MAXWIDTH;
+   info->geometry.max_height   = MAXHEIGHT;
+   info->geometry.aspect_ratio = maspect;
 }
 
 void retro_set_controller_port_device(unsigned port, unsigned device)
@@ -177,15 +315,16 @@ bool retro_load_game(const struct retro_game_info *info)
 
    full_path = info->path;
 
-   // Emulate BIOS
-   vjs.GPUEnabled = true;
-   vjs.audioEnabled = true;
-   vjs.DSPEnabled = true;
-   vjs.hardwareTypeNTSC = true;
-   vjs.useJaguarBIOS = false;
    vjs.renderType = 0;
-
    check_variables();
+
+	if (log_enabled)
+	{
+		bool success = (bool)LogInit("./virtualjaguar.log");	// Init logfile
+
+		if (!success)
+			printf("Failed to open virtualjaguar.log for writing!\n");
+	}
 
    //strcpy(vjs.EEPROMPath, "/path/to/eeproms/");   // battery saves
    JaguarInit();                                             // set up hardware
@@ -240,16 +379,14 @@ void retro_init(void)
 {
    unsigned level = 18;
 
-   videoWidth = 320;
-   videoHeight = 240;
-   videoBuffer = (uint32_t *)calloc(sizeof(uint32_t), 1024 * 512);
-   sampleBuffer = (uint16_t *)malloc(2048 * sizeof(uint16_t)); //found in dac.h
-   memset(sampleBuffer, 0, 2048 * sizeof(uint16_t));
+   videoWidth = MAXWIDTH;
+   videoHeight = MAXHEIGHT;
+   videoBuffer = (uint32_t *)calloc(sizeof(uint32_t), MAXWIDTH * MAXHEIGHT);
+   sampleBuffer = (uint16_t *)malloc(BUFMAX * sizeof(uint16_t)); //found in dac.h
+   memset(sampleBuffer, 0, BUFMAX * sizeof(uint16_t));
 
-   //game_width = TOMGetVideoModeWidth();
-   //game_height = TOMGetVideoModeHeight();
-   game_width = 320;
-   game_height = 240;
+   game_width = STARTWIDTH;
+   game_height = STARTHEIGHT;
 
    environ_cb(RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL, &level);
 }
@@ -257,6 +394,7 @@ void retro_init(void)
 void retro_deinit(void)
 {
    JaguarDone();
+   if (log_enabled)LogDone();									// Close logfile
    free(videoBuffer);
    free(sampleBuffer); //found in dac.h
 }
@@ -276,9 +414,27 @@ void retro_run(void)
    update_input();
 
    JaguarExecuteNew();
-   
-   SDLSoundCallback(NULL, sampleBuffer, 1600);
 
-   video_cb(videoBuffer, game_width, game_height, game_width << 2);
-   audio_batch_cb((int16_t *)sampleBuffer, 1600/2);
+	static int lastw=STARTWIDTH;
+
+	if(lastw!=TOMGetVideoModeWidth()){
+
+		printf("width change:%d-" ,lastw);
+		lastw=TOMGetVideoModeWidth();
+		printf(">%d\n" ,lastw);
+
+	    game_width = TOMGetVideoModeWidth();
+	    game_height = TOMGetVideoModeHeight();
+		tomWidth = game_width; tomHeight = game_height;
+
+		printf("new res:%dx%d %f\n",game_width,game_height,(float)game_width/game_height);
+
+		bool ret;
+		ret = environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &g_av_info.geometry);
+	}
+
+   SDLSoundCallback(NULL,sampleBuffer, vjs.hardwareTypeNTSC==1?BUFNTSC:BUFPAL);
+
+   video_cb(videoBuffer, game_width, game_height, MAXWIDTH << 2);
+   audio_batch_cb((int16_t *)sampleBuffer, vjs.hardwareTypeNTSC==1?BUFNTSC/2:BUFPAL/2);
 }

@@ -1,4 +1,9 @@
 DEBUG = 0
+PLATFLAG := -D__GCCUNIX__
+
+ifeq ($(platform),wincross64)
+   PLATFLAG := -DMAX_PATH=260 
+endif
 
 ifeq ($(platform),)
 platform = unix
@@ -12,6 +17,7 @@ ifeq ($(shell uname -p),powerpc)
 endif
 else ifneq ($(findstring MINGW,$(shell uname -a)),)
    platform = win
+   PLATFLAG := -DMAX_PATH=260
 endif
 endif
 
@@ -91,6 +97,13 @@ else ifeq ($(platform), psp1)
 	AR = psp-ar$(EXE_EXT)
    STATIC_LINKING = 1
 	FLAGS += -G0 -DLSB_FIRST
+else ifeq ($(platform), wincross64)
+   TARGET := $(TARGET_NAME)_libretro.dll
+   CC = x86_64-w64-mingw32-gcc
+   CXX =x86_64-w64-mingw32-g++
+   SHARED := -shared -Wl,--no-undefined -Wl,--version-script=link.T
+   LDFLAGS += -static-libgcc -static-libstdc++ -lwinmm -m64
+   PLATFLAG += -m64 -mms-bitfields
 else
    TARGET := $(TARGET_NAME)_libretro.dll
    CC = gcc
@@ -156,8 +169,13 @@ endif
 
 # Set vars for libcdio
 ifneq "$(shell pkg-config --silence-errors --libs libcdio)" ""
+ifneq ($(platform), wincross64)
 HAVECDIO := -DHAVE_LIB_CDIO
 CDIOLIB := -lcdio
+else
+HAVECDIO :=
+CDIOLIB :=
+endif
 else
 HAVECDIO :=
 CDIOLIB :=
@@ -186,8 +204,8 @@ endif
 
 FLAGS += -D__LIBRETRO__ $(WARNINGS)
 
-CXXFLAGS += $(FLAGS) -D__GCCUNIX__ $(HAVECDIO)
-CFLAGS += $(FLAGS) $(HAVECDIO)
+CXXFLAGS += $(FLAGS) $(PLATFLAG) $(HAVECDIO)
+CFLAGS += $(FLAGS) $(HAVECDIO) $(PLATFLAG)
 
 $(TARGET): $(OBJECTS)
 ifeq ($(STATIC_LINKING), 1)
